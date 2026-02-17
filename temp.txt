@@ -1,0 +1,57 @@
+Using turtle bot for project instead of my own robot
+
+// GPU enabled docker
+xhost +local:docker
+
+docker run -it --rm \
+  --name irrp_ros2 \
+  --net=host \
+  --ipc=host \
+  --gpus all \
+  -e DISPLAY=$DISPLAY \
+  -e QT_X11_NO_MITSHM=1 \
+  -e NVIDIA_VISIBLE_DEVICES=all \
+  -e NVIDIA_DRIVER_CAPABILITIES=all \
+  -v /tmp/.X11-unix:/tmp/.X11-unix \
+  -v /home/sha/Documents/IRRP/Project/tb3_ws:/home/ros/ws \
+  irrp-humble
+
+
+
+
+// everytime i open a new terminal use this
+
+source /opt/ros/humble/setup.bash
+
+
+//installed slam-toolbox and turtlebot3
+
+sudo apt update
+sudo apt install ros-humble-turtlebot3* ros-humble-slam-toolbox
+
+//everytime you simulate bot enter this
+
+
+export TURTLEBOT3_MODEL=burger
+echo $TURTLEBOT3_MODEL
+
+
+//to launch turtle bot in gazebo environemnt
+
+ros2 launch turtlebot3_gazebo turtlebot3_world.launch.py
+
+
+// to launch slam_toolbox in new terminal
+ros2 launch slam_toolbox online_async_launch.py
+
+
+// for controllers again in new terminal
+
+source /opt/ros/humble/setup.bash
+export TURTLEBOT3_MODEL=burger
+
+ros2 run teleop_twist_keyboard teleop_twist_keyboard \
+--ros-args \
+-p linear_speed:=0.15 \
+-p angular_speed:=0.4 \
+-p repeat_rate:=10.0
