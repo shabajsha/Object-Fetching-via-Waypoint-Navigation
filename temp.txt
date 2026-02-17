@@ -55,3 +55,7 @@ ros2 run teleop_twist_keyboard teleop_twist_keyboard \
 -p linear_speed:=0.15 \
 -p angular_speed:=0.4 \
 -p repeat_rate:=10.0
+
+
+// to launch nav2
+ros2 launch turtlebot3_navigation2 navigation2.launch.py use_sim_time:=True
