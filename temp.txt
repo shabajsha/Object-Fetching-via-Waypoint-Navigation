@@ -59,3 +59,6 @@ ros2 run teleop_twist_keyboard teleop_twist_keyboard \
 
 // to launch nav2
 ros2 launch turtlebot3_navigation2 navigation2.launch.py use_sim_time:=True
+
+// to run waypoint_navigator file
+ros2 run waypoint_navigator navigator
