@@ -13,7 +13,7 @@ docker run -it --rm \
   -e NVIDIA_VISIBLE_DEVICES=all \
   -e NVIDIA_DRIVER_CAPABILITIES=all \
   -v /tmp/.X11-unix:/tmp/.X11-unix \
-  -v /home/sha/Documents/IRRP/Project/tb3_ws:/home/ros/ws \
+  -v /home/sha/Documents/IRPP/Project/tempProject/Object-Fetching-via-Waypoint-Navigation:/home/ros/ws \
   irrp-humble
 
 
@@ -22,7 +22,10 @@ docker run -it --rm \
 // everytime i open a new terminal use this
 
 source /opt/ros/humble/setup.bash
-
+source install/setup.bash
+export TURTLEBOT3_MODEL=burger
+export LDS_MODEL=LDS-01
+echo $TURTLEBOT3_MODEL
 
 //installed slam-toolbox and turtlebot3
 
@@ -32,8 +35,7 @@ sudo apt install ros-humble-turtlebot3* ros-humble-slam-toolbox
 //everytime you simulate bot enter this
 
 
-export TURTLEBOT3_MODEL=burger
-echo $TURTLEBOT3_MODEL
+
 
 
 //to launch turtle bot in gazebo environemnt
@@ -62,3 +64,27 @@ ros2 launch turtlebot3_navigation2 navigation2.launch.py use_sim_time:=True
 
 // to run waypoint_navigator file
 ros2 run waypoint_navigator navigator
+
+
+
+Terminal 1
+
+ros2 launch gazebo_ros gazebo.launch.py world:=/home/ros/ws/worlds/intial.world
+
+Terminal 2
+
+ros2 run gazebo_ros spawn_entity.py \
+-file /opt/ros/humble/share/turtlebot3_description/urdf/turtlebot3_burger.urdf \
+-entity tb3
+
+Terminal 3
+
+ros2 launch turtlebot3_bringup robot.launch.py use_sim_time:=True
+
+Terminal 4
+
+ros2 launch slam_toolbox online_async_launch.py use_sim_time:=True
+
+Terminal 5
+
+ros2 launch turtlebot3_navigation2 navigation2.launch.py use_sim_time:=True

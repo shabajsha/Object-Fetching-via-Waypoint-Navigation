@@ -25,6 +25,7 @@ setup(
     entry_points={
         'console_scripts': [
             'navigator = waypoint_navigator.navigator:main',
+            'box_manager = waypoint_navigator.box_manager:main',
         ],
     },
 )
