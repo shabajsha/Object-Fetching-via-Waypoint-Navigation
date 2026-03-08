@@ -13,19 +13,21 @@ class BoxManager(Node):
     def __init__(self):
         super().__init__('box_manager')
 
-        # Updated pickup locations with 4th point added
-        self.pickup_locations = [
-            (5.37, -0.34),    # pickup 1
-            (-0.87, -5.65),   # pickup 2
-            (-0.87, -5.65),   # pickup 3 (duplicate - will stack at same location)
-            (-8.57, -3.58)    # pickup 4
+        # Define pickup jobs (location + how many boxes at that location)
+        self.pickup_jobs = [
+            {"xy": (5.374265193939209, -0.33860430121421814), "count": 1},
+            {"xy": (-0.869442343711853, -5.6549482345581055), "count": 1},  # changed from count: 2 to count: 1
+            {"xy": (-8.57079792022705, -3.57749342918396), "count": 1},
         ]
 
-        # Updated drop zone
-        self.drop_zone = (-2.81, 3.17)
+        # Backward-compatible list if any old code still references pickup_locations
+        self.pickup_locations = [job["xy"] for job in self.pickup_jobs for _ in range(job["count"])]
 
-        self.pickup_trigger_radius = 1.05
-        self.drop_trigger_radius = 0.75
+        self.drop_zone = (-2.811201333999634, 3.1657333374023438)
+
+        # Reduced trigger radii so boxes don't disappear too early
+        self.pickup_trigger_radius = 1.5   # reduced from 2.0
+        self.drop_trigger_radius = 0.8     # reduced from 1.5
 
         self.active_boxes = []
         self.delivered_count = 0
@@ -51,25 +53,21 @@ class BoxManager(Node):
             self.get_logger().info('Waiting for delete service...')
 
         self.spawn_initial_boxes()
-        self.get_logger().info("Box Manager Started with updated locations")
+        self.get_logger().info("Box Manager Started")
 
     def odom_callback(self, msg):
         self.current_pose = msg.pose.pose
 
     def spawn_initial_boxes(self):
-        for idx, location in enumerate(self.pickup_locations):
-            box_name = f"cardboard_box_{idx}"
-            # Stack boxes 2 and 3 at same location with height offset
-            if idx == 0 or idx == 3:
-                z_offset = 0.10
-            elif idx == 1:
-                z_offset = 0.10
-            else:  # idx == 2
-                z_offset = 0.41
-            
-            self.spawn_box(box_name, location[0], location[1], z_offset, static_model=True)
-            self.active_boxes.append({'name': box_name, 'location': location, 'picked': False})
-            self.get_logger().info(f"Spawned {box_name} at {location}")
+        idx = 0
+        for job in self.pickup_jobs:
+            x, y = job["xy"]
+            for n in range(job["count"]):
+                box_name = f"cardboard_box_{idx}"
+                z_offset = 0.10 + (0.31 * n)
+                self.spawn_box(box_name, x, y, z_offset, static_model=True)
+                self.active_boxes.append({'name': box_name, 'location': (x, y), 'picked': False})
+                idx += 1
 
     def spawn_box(self, name, x, y, z, static_model=True):
         request = SpawnEntity.Request()
@@ -145,17 +143,12 @@ class BoxManager(Node):
     def publish_markers(self):
         """Publish text markers for pickup spots and drop zone"""
         marker_array = MarkerArray()
-        
-        # Pickup markers (avoid duplicate markers at same location)
-        unique_locations = {}
-        for idx, location in enumerate(self.pickup_locations):
-            loc_key = location
-            if loc_key not in unique_locations:
-                unique_locations[loc_key] = []
-            unique_locations[loc_key].append(idx + 1)
-        
+
         marker_id = 0
-        for location, pickup_nums in unique_locations.items():
+        for job in self.pickup_jobs:
+            x, y = job["xy"]
+            count = job["count"]
+
             marker = Marker()
             marker.header.frame_id = "map"
             marker.header.stamp = self.get_clock().now().to_msg()
@@ -163,27 +156,19 @@ class BoxManager(Node):
             marker.id = marker_id
             marker.type = Marker.TEXT_VIEW_FACING
             marker.action = Marker.ADD
-            
-            marker.pose.position.x = location[0]
-            marker.pose.position.y = location[1]
+            marker.pose.position.x = x
+            marker.pose.position.y = y
             marker.pose.position.z = 0.5
             marker.pose.orientation.w = 1.0
-            
             marker.scale.z = 0.3
             marker.color.r = 0.0
             marker.color.g = 1.0
             marker.color.b = 0.0
             marker.color.a = 1.0
-            
-            if len(pickup_nums) > 1:
-                marker.text = f"Pickups {','.join(map(str, pickup_nums))}"
-            else:
-                marker.text = f"Pickup {pickup_nums[0]}"
-            
+            marker.text = f"Pickup x{count}" if count > 1 else "Pickup"
             marker_array.markers.append(marker)
             marker_id += 1
-        
-        # Drop zone marker
+
         drop_marker = Marker()
         drop_marker.header.frame_id = "map"
         drop_marker.header.stamp = self.get_clock().now().to_msg()
@@ -191,21 +176,18 @@ class BoxManager(Node):
         drop_marker.id = 100
         drop_marker.type = Marker.TEXT_VIEW_FACING
         drop_marker.action = Marker.ADD
-        
         drop_marker.pose.position.x = self.drop_zone[0]
         drop_marker.pose.position.y = self.drop_zone[1]
         drop_marker.pose.position.z = 0.5
         drop_marker.pose.orientation.w = 1.0
-        
         drop_marker.scale.z = 0.3
         drop_marker.color.r = 1.0
         drop_marker.color.g = 0.0
         drop_marker.color.b = 0.0
         drop_marker.color.a = 1.0
-        
         drop_marker.text = "DROP ZONE"
         marker_array.markers.append(drop_marker)
-        
+
         self.marker_pub.publish(marker_array)
 
     def get_box_sdf(self, static_model=True):
