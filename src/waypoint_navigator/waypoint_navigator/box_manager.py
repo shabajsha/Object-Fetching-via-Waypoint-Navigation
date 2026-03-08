@@ -13,21 +13,23 @@ class BoxManager(Node):
     def __init__(self):
         super().__init__('box_manager')
 
-        # Updated pickup locations from RViz
+        # Updated pickup locations with 4th point added
         self.pickup_locations = [
-            (-0.89, -5.74),  # pickup 1
-            (0.06, 9.22),    # pickup 2
-            (6.74, 0.39)     # pickup 3
+            (5.37, -0.34),    # pickup 1
+            (-0.87, -5.65),   # pickup 2
+            (-0.87, -5.65),   # pickup 3 (duplicate - will stack at same location)
+            (-8.57, -3.58)    # pickup 4
         ]
 
-        self.drop_zone = (-1.01, 2.76)
+        # Updated drop zone
+        self.drop_zone = (-2.81, 3.17)
 
         self.pickup_trigger_radius = 1.05
         self.drop_trigger_radius = 0.75
 
         self.active_boxes = []
         self.delivered_count = 0
-        self.delivered_boxes = []  # track delivered boxes for cleanup
+        self.delivered_boxes = []
         self.current_pose = None
 
         # Service clients
@@ -40,7 +42,7 @@ class BoxManager(Node):
         self.create_subscription(Odometry, '/odom', self.odom_callback, 10)
         self.create_timer(0.5, self.check_proximity)
         self.create_timer(2.0, self.publish_markers)
-        self.create_timer(60.0, self.cleanup_delivered_boxes)  # cleanup every 60s
+        self.create_timer(60.0, self.cleanup_delivered_boxes)
 
         while not self.spawn_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('Waiting for spawn service...')
@@ -57,7 +59,15 @@ class BoxManager(Node):
     def spawn_initial_boxes(self):
         for idx, location in enumerate(self.pickup_locations):
             box_name = f"cardboard_box_{idx}"
-            self.spawn_box(box_name, location[0], location[1], 0.10, static_model=True)
+            # Stack boxes 2 and 3 at same location with height offset
+            if idx == 0 or idx == 3:
+                z_offset = 0.10
+            elif idx == 1:
+                z_offset = 0.10
+            else:  # idx == 2
+                z_offset = 0.41
+            
+            self.spawn_box(box_name, location[0], location[1], z_offset, static_model=True)
             self.active_boxes.append({'name': box_name, 'location': location, 'picked': False})
             self.get_logger().info(f"Spawned {box_name} at {location}")
 
@@ -110,7 +120,6 @@ class BoxManager(Node):
         z_height = 0.10 + (self.delivered_count * 0.29)
         self.spawn_box(box_name, self.drop_zone[0], self.drop_zone[1], z_height, static_model=True)
         
-        # Track for cleanup
         self.delivered_boxes.append({
             'name': box_name,
             'spawn_time': time.time()
@@ -137,13 +146,21 @@ class BoxManager(Node):
         """Publish text markers for pickup spots and drop zone"""
         marker_array = MarkerArray()
         
-        # Pickup markers
+        # Pickup markers (avoid duplicate markers at same location)
+        unique_locations = {}
         for idx, location in enumerate(self.pickup_locations):
+            loc_key = location
+            if loc_key not in unique_locations:
+                unique_locations[loc_key] = []
+            unique_locations[loc_key].append(idx + 1)
+        
+        marker_id = 0
+        for location, pickup_nums in unique_locations.items():
             marker = Marker()
             marker.header.frame_id = "map"
             marker.header.stamp = self.get_clock().now().to_msg()
             marker.ns = "waypoints"
-            marker.id = idx
+            marker.id = marker_id
             marker.type = Marker.TEXT_VIEW_FACING
             marker.action = Marker.ADD
             
@@ -158,8 +175,13 @@ class BoxManager(Node):
             marker.color.b = 0.0
             marker.color.a = 1.0
             
-            marker.text = f"Pickup {idx + 1}"
+            if len(pickup_nums) > 1:
+                marker.text = f"Pickups {','.join(map(str, pickup_nums))}"
+            else:
+                marker.text = f"Pickup {pickup_nums[0]}"
+            
             marker_array.markers.append(marker)
+            marker_id += 1
         
         # Drop zone marker
         drop_marker = Marker()

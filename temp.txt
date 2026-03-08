@@ -88,3 +88,47 @@ ros2 launch slam_toolbox online_async_launch.py use_sim_time:=True
 Terminal 5
 
 ros2 launch turtlebot3_navigation2 navigation2.launch.py use_sim_time:=True
+
+
+
+=== MAPPING SESSION (do once, save map) ===
+
+Terminal 1 – Gazebo
+ros2 launch gazebo_ros gazebo.launch.py world:=/home/ros/ws/worlds/intial.world
+
+Terminal 2 – Spawn
+ros2 run gazebo_ros spawn_entity.py \
+-file /opt/ros/humble/share/turtlebot3_description/urdf/turtlebot3_burger.urdf \
+-entity tb3 -x 0.0 -y 0.0 -z 0.01
+
+Terminal 3 – SLAM
+ros2 launch slam_toolbox online_async_launch.py use_sim_time:=True
+
+Terminal 4 – Teleop (drive rectangle around world)
+ros2 run teleop_twist_keyboard teleop_twist_keyboard \
+--ros-args -p linear_speed:=0.15 -p angular_speed:=0.4
+
+Terminal 5 – Save map
+mkdir -p /home/ros/ws/maps
+ros2 run nav2_map_server map_saver_cli -f /home/ros/ws/maps/project_map_final
+
+=== MISSION SESSION (reuse saved map) ===
+
+Terminal 1 – Gazebo
+ros2 launch gazebo_ros gazebo.launch.py world:=/home/ros/ws/worlds/intial.world
+
+Terminal 2 – Spawn
+ros2 run gazebo_ros spawn_entity.py \
+-file /opt/ros/humble/share/turtlebot3_description/urdf/turtlebot3_burger.urdf \
+-entity tb3 -x 0.0 -y 0.0 -z 0.01
+
+Terminal 3 – Nav2 (with saved map)
+ros2 launch turtlebot3_navigation2 navigation2.launch.py \
+use_sim_time:=True \
+map:=/home/ros/ws/maps/project_map_final.yaml
+
+Terminal 4 – Box manager
+ros2 run waypoint_navigator box_manager
+
+Terminal 5 – Navigator
+ros2 run waypoint_navigator navigator

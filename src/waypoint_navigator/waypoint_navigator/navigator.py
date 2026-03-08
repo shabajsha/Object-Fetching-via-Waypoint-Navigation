@@ -15,15 +15,16 @@ class TaskNavigator(Node):
 
         self.client = ActionClient(self, NavigateToPose, 'navigate_to_pose')
 
-        # Updated pickup locations from RViz clicked_point
+        # Updated pickup locations with 4th point added
         self.pickups = [
-            (-0.89, -5.74),  # pickup 1
-            (0.06, 9.22),    # pickup 2
-            (6.74, 0.39)     # pickup 3
+            (5.37, -0.34),    # pickup 1
+            (-0.87, -5.65),   # pickup 2
+            (-0.87, -5.65),   # pickup 3 (duplicate location)
+            (-8.57, -3.58)    # pickup 4
         ]
         
         # Updated drop zone
-        self.drop_zone = (-1.01, 2.76)
+        self.drop_zone = (-2.81, 3.17)
 
         self.current_pose = None
         self.target = None

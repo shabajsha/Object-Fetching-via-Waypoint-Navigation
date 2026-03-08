@@ -7,20 +7,24 @@ import argparse
 import math
 
 def parse_world(world_file):
-    """Parse Gazebo world and extract collision boxes"""
+    """Parse Gazebo world and extract collision geometry"""
     tree = ET.parse(world_file)
     root = tree.getroot()
     
     obstacles = []
     
-    # Find all models with collision geometry
+    # Find all models
     for model in root.findall('.//model'):
         model_name = model.get('name')
-        pose = model.find('pose')
+        pose_elem = model.find('pose')
         
-        if pose is not None:
-            pose_text = pose.text.strip().split()
-            x, y, z = float(pose_text[0]), float(pose_text[1]), float(pose_text[2])
+        # Get model pose
+        if pose_elem is not None:
+            pose_text = pose_elem.text.strip().split()
+            if len(pose_text) >= 3:
+                x, y, z = float(pose_text[0]), float(pose_text[1]), float(pose_text[2])
+            else:
+                x, y, z = 0, 0, 0
             if len(pose_text) >= 6:
                 yaw = float(pose_text[5])
             else:
@@ -28,10 +32,14 @@ def parse_world(world_file):
         else:
             x, y, z, yaw = 0, 0, 0, 0
         
+        # Check if static (walls)
+        static = model.find('static') is not None and model.find('static').text == '1'
+        
         # Find collision boxes
         for link in model.findall('.//link'):
             collision = link.find('collision')
             if collision is not None:
+                # Box geometry
                 box = collision.find('.//box/size')
                 if box is not None:
                     size_text = box.text.strip().split()
@@ -44,19 +52,43 @@ def parse_world(world_file):
                         'width': width,
                         'depth': depth,
                         'yaw': yaw,
-                        'name': model_name
+                        'name': model_name,
+                        'type': 'box'
                     })
+                    print(f"  [BOX] {model_name} at ({x:.2f}, {y:.2f}) size {width}x{depth}")
+                
+                # Mesh geometry (for iscas_museum)
+                mesh = collision.find('.//mesh/uri')
+                if mesh is not None:
+                    mesh_uri = mesh.text
+                    print(f"  [MESH] {model_name} at ({x:.2f}, {y:.2f}) - {mesh_uri}")
                     
-                    print(f"  Found: {model_name} at ({x:.2f}, {y:.2f}) size {width}x{depth}")
+                    # For ISCAS museum, use approximate bounding box
+                    if 'iscas_museum' in mesh_uri.lower() or 'museum' in model_name.lower():
+                        # ISCAS museum approximate size (large building)
+                        obstacles.append({
+                            'x': x,
+                            'y': y,
+                            'width': 30,
+                            'depth': 30,
+                            'yaw': yaw,
+                            'name': model_name,
+                            'type': 'mesh'
+                        })
+                        print(f"    → Using approximate bounding box 30x30m")
     
     return obstacles
 
-def create_occupancy_grid(obstacles, resolution=0.05, width=200, height=200):
+def create_occupancy_grid(obstacles, resolution=0.05, width=400, height=400):
     """Create 2D occupancy grid from obstacles"""
     grid = np.ones((height, width), dtype=np.uint8) * 255  # free space = white
     
     center_x = width / 2
     center_y = height / 2
+    
+    print(f"\n[*] Creating {width}x{height} grid (resolution: {resolution}m/px)")
+    print(f"[*] Grid covers: {-(width/2)*resolution} to {(width/2)*resolution} m in X")
+    print(f"[*] Grid covers: {-(height/2)*resolution} to {(height/2)*resolution} m in Y\n")
     
     # Set occupied cells
     for obs in obstacles:
@@ -73,15 +105,17 @@ def create_occupancy_grid(obstacles, resolution=0.05, width=200, height=200):
         y_min = max(0, grid_y - half_h)
         y_max = min(height, grid_y + half_h)
         
-        grid[y_min:y_max, x_min:x_max] = 0  # occupied = black
-    
+        if x_min < x_max and y_min < y_max:
+            grid[y_min:y_max, x_min:x_max] = 0  # occupied = black
+            print(f"  Placed {obs['name']:20s} grid:({x_min:3d},{y_min:3d}) to ({x_max:3d},{y_max:3d})")
+
     return grid
 
 def save_map(grid, output_file, resolution=0.05):
     """Save grid as PGM and YAML"""
     img = Image.fromarray(grid.astype(np.uint8), mode='L')
     img.save(output_file + '.pgm')
-    print(f"Saved: {output_file}.pgm")
+    print(f"\n[✓] Saved: {output_file}.pgm")
     
     # Create YAML meta file
     height, width = grid.shape
@@ -96,25 +130,28 @@ free_thresh: 0.196
     with open(output_file + '.yaml', 'w') as f:
         f.write(yaml_content)
     
-    print(f"Saved: {output_file}.yaml")
+    print(f"[✓] Saved: {output_file}.yaml")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--world', required=True, help='Path to Gazebo world file')
     parser.add_argument('--output', required=True, help='Output map file prefix')
     parser.add_argument('--resolution', type=float, default=0.05, help='Map resolution in meters/pixel')
+    parser.add_argument('--width', type=int, default=400, help='Grid width in pixels')
+    parser.add_argument('--height', type=int, default=400, help='Grid height in pixels')
     
     args = parser.parse_args()
     
-    print(f"[*] Parsing world: {args.world}")
+    print(f"\n[*] Parsing world: {args.world}")
     obstacles = parse_world(args.world)
-    print(f"[*] Found {len(obstacles)} obstacles\n")
+    print(f"\n[*] Found {len(obstacles)} obstacles/models")
     
-    print(f"[*] Creating occupancy grid (resolution: {args.resolution}m/px)")
-    grid = create_occupancy_grid(obstacles, resolution=args.resolution)
+    print(f"\n[*] Creating occupancy grid...")
+    grid = create_occupancy_grid(obstacles, resolution=args.resolution, 
+                                  width=args.width, height=args.height)
     
     print(f"[*] Saving map...")
     save_map(grid, args.output, resolution=args.resolution)
     print(f"\n[✓] Done! Use this map with Nav2:")
     print(f"    ros2 launch turtlebot3_navigation2 navigation2.launch.py \\")
-    print(f"      use_sim_time:=True map:={args.output}.yaml")
+    print(f"      use_sim_time:=True map:={args.output}.yaml\n")
