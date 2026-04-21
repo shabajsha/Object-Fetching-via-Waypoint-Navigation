@@ -1,15 +1,3 @@
-Absolutely. I’ll write you a **clean, professional README** that:
-
-* explains the project clearly
-* includes setup (Docker + ROS2)
-* includes running instructions
-* looks good on GitHub
-* helps in evals
-
-You can copy–paste this directly.
-
----
-
 # 📦 Object Fetching via Waypoint Navigation (ROS2 + TurtleBot3)
 
 ## 📖 Overview
